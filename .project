@@ -24,4 +24,16 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>libcoap</name>
+			<type>2</type>
+			<location>/home/pawwik/dev/libcoap</location>
+		</link>
+		<link>
+			<name>liboic</name>
+			<type>2</type>
+			<location>/home/pawwik/dev/liboic</location>
+		</link>
+	</linkedResources>
 </projectDescription>
