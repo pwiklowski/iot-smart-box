@@ -80,11 +80,14 @@ kill(pid_t pid __attribute__((unused)), int sig __attribute__((unused)))
 
 #endif // !defined(OS_USE_SEMIHOSTING)
 
+
+
+//#define OS_USE_SEMIHOSTING
 // ----------------------------------------------------------------------------
 
 // If you need the empty definitions, remove the -ffreestanding option.
 
-#if __STDC_HOSTED__ == 1
+#if __STDC_HOSTED__ == 0
 
 char* __env[1] =
   { 0 };
