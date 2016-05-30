@@ -30,13 +30,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include "stm32f10x_gpio.h"
-
+extern "C"{
+#include "printf.h"
+}
 
 
 #define TIMEOUT_MODE_READY    1000000 ///< Maximum amount of time until mode switch [ms]
 #define TIMEOUT_PACKET_SENT   100 ///< Maximum amount of time until packet must be sent [ms]
 #define TIMEOUT_CSMA_READY    500 ///< Maximum CSMA wait time for channel free detection [ms]
 #define CSMA_RSSI_THRESHOLD   -85 ///< If RSSI value is smaller than this, consider channel as free [dBm]
+
 
 /** RFM69 base configuration after init().
  *
@@ -61,7 +64,7 @@ static const uint8_t rfm69_base_config[][2] =
     {0x2F, 0x41}, // RegSyncValue1: 0x4148
     {0x30, 0x48}, // RegSyncValue2
     {0x37, 0xD0}, // RegPacketConfig1: Variable length, CRC on, whitening
-    {0x38, 0x40}, // RegPayloadLength: 64 bytes max payload
+    {0x38, RFM69_MAX_PAYLOAD}, // RegPayloadLength: 64 bytes max payload
     {0x3C, 0x8F}, // RegFifoThresh: TxStart on FifoNotEmpty, 15 bytes FifoLevel
     {0x58, 0x1B}, // RegTestLna: Normal sensitivity mode
     {0x6F, 0x30}, // RegTestDagc: Improved margin, use if AfcLowBetaOn=0 (default)
@@ -439,43 +442,91 @@ void RFM69::setCustomConfig(const uint8_t config[][2], unsigned int length)
  *
  * @return Number of bytes that have been sent
  */
-
-int RFM69::send(uint8_t* packet, unsigned int dataLength)
+int RFM69::sendPacket(uint8_t* packet, uint16_t len)
 {
-	uint16_t bytesToBeSent = dataLength;
+	printf_("sendPacket %d\n", len);
+
+	uint16_t bytesToBeSent = len;
 	uint8_t* data = packet;
-	while(bytesToBeSent >0){
-		if (bytesToBeSent > 64){
-			_send(data, 64);
-			data += 64;
-			bytesToBeSent -= 64;
+
+	while(bytesToBeSent > 0){
+		if (bytesToBeSent > RFM69_MAX_PAYLOAD){
+			if (sendWithAck(data, RFM69_MAX_PAYLOAD) <0 ) return -1;
+			bytesToBeSent -= RFM69_MAX_PAYLOAD;
+			data += RFM69_MAX_PAYLOAD;
 		}else{
-			_send(data, bytesToBeSent);
-			bytesToBeSent =0;
+			if (sendWithAck(data, bytesToBeSent) <0 ) return -1;
+			bytesToBeSent = 0;
 		}
 	}
+
+
+}
+
+int RFM69::receivePacket(uint8_t* buf, uint16_t maxSize){
+	uint8_t ack[] = {0,0};
+
+	int bytesToReceive;
+
+	uint16_t bytesReceived = _receive(buf, 64);
+
+	if (bytesReceived == 0) return 0;
+
+	bytesToReceive = (buf[0]<<8 | buf[1]) + 2;
+
+	printf_("receivePacket plen=%d\n", bytesToReceive);
+	printf_("received bytes len=%d\n", bytesReceived);
+	send(ack, 2);
+
+	if (bytesToReceive > bytesReceived){
+		bytesToReceive -= bytesReceived;
+		while(bytesToReceive > 0){
+			while(!isPacketReady());
+			int l = _receive(buf, 64);
+			printf_("received bytes len=%d\n", l);
+			send(ack, 2);
+			bytesToReceive -=l;
+			bytesReceived += l;
+		}
+	}
+	return bytesReceived;
 }
 
 
-int RFM69::_send(const void* data, unsigned int dataLength)
+int RFM69::sendWithAck(uint8_t* data, uint16_t len){
+	printf_("sendWithAck %d\n", len);
+	uint8_t buf[20];
+	for (int i=0; i<10; i++){
+		send(data, len);
+		printf_("wait for ack \n");
+
+		for (int j=0; j<100; j++){
+			if (isPacketReady()) break;
+			printf_("waiting for ack %d\n", j);
+			delay_ms(1);
+		}
+
+		int res = _receive(buf, 20);
+		if (res >0){
+			printf_("received ack len=%d\n", res);
+			return len;
+		}else{
+			printf_("ack not received, try again %d\n", i);
+		}
+	}
+	return -1;
+}
+
+
+int RFM69::send(uint8_t* data, unsigned int dataLength)
 {
-  // switch to standby and wait for mode ready, if not in sleep mode
   if (RFM69_MODE_SLEEP != _mode)
   {
     setMode(RFM69_MODE_STANDBY);
     waitForModeReady();
   }
 
-  // clear FIFO to remove old data and clear flags
   clearFIFO();
-
-  // limit max payload
-  if (dataLength > RFM69_MAX_PAYLOAD)
-    dataLength = RFM69_MAX_PAYLOAD;
-
-  // payload must be available
-  if (0 == dataLength)
-    return 0;
 
   /* Wait for a free channel, if CSMA/CA algorithm is enabled.
    * This takes around 1,4 ms to finish if channel is free */
@@ -523,9 +574,7 @@ int RFM69::_send(const void* data, unsigned int dataLength)
   // address FIFO
   _spi->transfer(0x00 | 0x80);
 
-
   _spi->transfer(dataLength);
-
 
   // send payload
   for (unsigned int i = 0; i < dataLength; i++)
@@ -533,13 +582,13 @@ int RFM69::_send(const void* data, unsigned int dataLength)
 
   chipUnselect();
 
-  // start radio transmission
   setMode(RFM69_MODE_TX);
 
-  // wait for packet sent
   waitForPacketSent();
 
-  // go to standby
+
+
+
   setMode(RFM69_MODE_STANDBY);
 
   return dataLength;
@@ -613,6 +662,59 @@ int RFM69::receive(uint8_t* data, unsigned int dataLength)
  * @param dataLength Maximum size of buffer
  * @return Number of received bytes; 0 if no payload is available.
  */
+
+bool RFM69::isFifoNotEmpty(){
+	uint8_t reg = readRegister(0x28);
+    return reg & 0x40;
+}
+
+bool RFM69::isPacketReady(){
+	if (RFM69_MODE_RX != _mode)
+	{
+		setMode(RFM69_MODE_RX);
+		waitForModeReady();
+	}
+
+	uint8_t reg = readRegister(0x28);
+    return reg & 0x4;
+}
+
+int RFM69::read(uint8_t* data, uint16_t dataLength)
+{
+	unsigned int bytesRead = 0;
+
+	while (bytesRead < dataLength)
+	{
+		//wait for bytes
+		while (!isFifoNotEmpty());
+
+		data[bytesRead] = readRegister(0x00);
+		bytesRead++;
+	}
+
+	return bytesRead;
+}
+int RFM69::readPacket(uint8_t* data, unsigned int dataLength)
+{
+	// get FIFO content
+	unsigned int bytesRead = 0;
+
+	while (bytesRead < dataLength)
+	{
+		//wait for bytes
+		while (!isFifoNotEmpty()){
+			printf_("waiting for bytes");
+		}
+		uint8_t reg = readRegister(0x28);
+		printf_("reg %d %d\n", reg, bytesRead);
+
+		data[bytesRead] = readRegister(0x00);
+		bytesRead++;
+	}
+
+	return bytesRead;
+}
+
 int RFM69::_receive(uint8_t* data, unsigned int dataLength)
 {
   // go to RX mode if not already in this mode
@@ -630,6 +732,9 @@ int RFM69::_receive(uint8_t* data, unsigned int dataLength)
 
     // get FIFO content
     unsigned int bytesRead = 0;
+
+    uint16_t bytesInChunk = readRegister(0x0);
+
 
     // read until FIFO is empty or buffer length exceeded
     while ((readRegister(0x28) & 0x40) && (bytesRead < dataLength))

@@ -1,7 +1,5 @@
 
-#include <stdio.h>
 #include <ctype.h>
-#include <stdlib.h>
 #include "stm32f10x.h"
 #include "stm32f10x_usart.h"
 #include "systimer.h"
@@ -13,6 +11,9 @@
 #include "cbor.h"
 #include "OICServer.h"
 
+extern "C"{
+	#include "printf.h"
+}
 
 
 void init(){
@@ -68,19 +69,9 @@ void init(){
 
 }
 
-void sendChar(char c){
-	USART_SendData(USART1, c);
-	while(USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET);
-}
 
 
-void send(char* str){
-	char* p = str;
 
-	while(*p != 0){
-		sendChar(*(p++));
-	}
-}
 static void reverse(char* s)
 {
     int i, j;
@@ -114,7 +105,7 @@ int main()
 {
 	uint8_t buf[1024];
 	init();
-	send("start\n");
+	printf_("start\n");
 
 	SPI spiRF(SPI1);
 	spiRF.setPrescaler(SPI_BaudRatePrescaler_8);
@@ -122,6 +113,10 @@ int main()
 	//SPI_RxFIFOThresholdConfig (SPI1, SPI_RxFIFOThreshold_HF);
 
 
+	for(int i=0; i<255; i++){
+		buf[i] = i;
+
+	}
 
 
 	RFM69 rfm69(&spiRF, GPIOA, GPIO_Pin_4, false); // false = RFM69W, true = RFM69HW
@@ -132,6 +127,49 @@ int main()
 
 	rfm69.setPowerDBm(10); // +10 dBm
 
+	char* test = "czesc";
+	char* ok = "ok";
+
+
+	rfm69.setMode(RFM69_MODE_RX);
+	rfm69.waitForModeReady();
+
+
+	buf[0] = 200 >>8;
+	buf[1] = 200;
+
+	while(1){
+
+
+//		int res = rfm69._receive(buf, 64);
+//		if (res >0){
+//			printf_("received packet with len=%d\n", res);
+//			rfm69.send((uint8_t*)ok, 2);
+//		}
+
+		int res = rfm69.receivePacket(buf, 1024);
+		if (res >0){
+			printf_("received packet with len=%d\n", res);
+		}
+
+
+
+//
+//		printf_("send packet\n");
+//		if (rfm69.sendPacket(buf, 202) <0){
+//			printf_("send packet FAIL\n");
+//		}
+//
+//		delay_ms(5000);
+//
+//
+//
+
+
+	}
+
+
+
 	uint8_t status;
 
 	OICServer server("Buttun PC","0685B960-736F-46F7-BEC0-9E6CBD61ADC1", [&](COAPPacket* packet){
@@ -139,7 +177,7 @@ int main()
 		packet->build(buf, &response_len);
 		rfm69.send(buf, response_len);
 		rfm69.sleep();
-		send("send packet\n");
+		printf_("send packet\n");
 
 	});
 
@@ -180,7 +218,7 @@ int main()
 		c += bytesReceived;
 
 		if (bytesReceived>0){
-			send("Handle bytes\n");
+			printf_("Handle bytes\n");
 			COAPPacket* p = COAPPacket::parse(buf+1, bytesReceived, "afs");
 			if (p !=0){
 				//send("Handle packet\n");

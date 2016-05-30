@@ -99,6 +99,7 @@ public:
   RFM69Mode setMode(RFM69Mode mode);
 
   int send(uint8_t* data, unsigned int dataLength);
+  int sendWithAck(uint8_t* data, uint16_t len);
   void setPowerLevel(uint8_t power);
 
   int setPowerDBm(int8_t dBm);
@@ -158,6 +159,17 @@ public:
   
   bool setAESEncryption(const void* aesKey, unsigned int keyLength);
   int _receive(uint8_t* data, unsigned int dataLength);
+
+
+  int read(uint8_t* data, uint16_t len);
+  void waitForModeReady();
+  bool isFifoNotEmpty();
+  bool isPacketReady();
+
+  int readPacket(uint8_t* data, unsigned int dataLength);
+  int sendPacket(uint8_t* data, uint16_t len);
+
+  int receivePacket(uint8_t* buf, uint16_t maxSize);
 private:
   uint8_t readRegister(uint8_t reg);
   int _send(const void* data, unsigned int dataLength);
@@ -170,7 +182,6 @@ private:
 
   void clearFIFO();
 
-  void waitForModeReady();
 
   void waitForPacketSent();
 
