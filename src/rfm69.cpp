@@ -500,9 +500,9 @@ int RFM69::receivePacket(uint8_t* buf, uint16_t maxSize){
 	if (bytesToReceive > bytesReceived){
 		bytesToReceive -= bytesReceived;
 		while(bytesToReceive > 0){
-			while(!isPacketReady());
-			int l = _receive(buf, 64);
 			printf_("received bytes len=%d\n", l);
+			while(!isPacketReady()); // todo add timeout
+			int l = _receive(buf+ bytesReceived, RFM69_MAX_PAYLOAD);
 			send(ack, 2);
 			bytesToReceive -=l;
 			bytesReceived += l;
