@@ -448,6 +448,11 @@ void RFM69::setCustomConfig(const uint8_t config[][2], unsigned int length)
  *
  * @return Number of bytes that have been sent
  */
+
+
+uint8_t syncSentence[] = {'w', 'i', 'k', 'l', 'o', 's', 'o', 'f', 't', 0, 0};
+
+
 int RFM69::sendPacket(uint8_t* packet, uint16_t len)
 {
 	printf_("sendPacket %d\n", len);
@@ -455,6 +460,10 @@ int RFM69::sendPacket(uint8_t* packet, uint16_t len)
 	uint16_t bytesToBeSent = len;
 	uint8_t* data = packet;
 
+	syncSentence[9] = len <<8;
+	syncSentence[10] = len;
+
+	if (sendWithAck(syncSentence, 11) <0 ) return -1;
 	while(bytesToBeSent > 0){
 		if (bytesToBeSent > RFM69_MAX_PAYLOAD){
 			if (sendWithAck(data, RFM69_MAX_PAYLOAD) <0 ) return -1;
@@ -474,11 +483,15 @@ int RFM69::receivePacket(uint8_t* buf, uint16_t maxSize){
 
 	int bytesToReceive;
 
-	uint16_t bytesReceived = _receive(buf, 64);
+	uint16_t bytesReceived = _receive(buf, RFM69_MAX_PAYLOAD);
 
 	if (bytesReceived == 0) return 0;
 
-	bytesToReceive = (buf[0]<<8 | buf[1]) + 2;
+	if (bytesReceived != sizeof(syncSentence)) return 0;
+
+	bytesToReceive = (buf[9]<<8 | buf[10]);
+
+	bytesReceived = 0;
 
 	printf_("receivePacket plen=%d\n", bytesToReceive);
 	printf_("received bytes len=%d\n", bytesReceived);
