@@ -49,15 +49,21 @@ static const uint8_t rfm69_base_config[][2] =
 {
     {0x01, 0x04}, // RegOpMode: Standby Mode
     {0x02, 0x00}, // RegDataModul: Packet mode, FSK, no shaping
-    {0x03, 0x0C}, // RegBitrateMsb: 10 kbps
+    {0x03, 0x00}, // RegBitrateMsb: 10 kbps
     {0x04, 0x80}, // RegBitrateLsb
-    {0x05, 0x01}, // RegFdevMsb: 20 kHz
-    {0x06, 0x48}, // RegFdevLsb
+
+    {0x05, 0x10}, // RegFdevMsb: 20 kHz
+	{0x06, 0x00}, // RegFdevLsb
+
+
     {0x07, 0xD9}, // RegFrfMsb: 868,15 MHz
     {0x08, 0x09}, // RegFrfMid
     {0x09, 0x9A}, // RegFrfLsb
     {0x18, 0x88}, // RegLNA: 200 Ohm impedance, gain set by AGC loop
-    {0x19, 0x4C}, // RegRxBw: 25 kHz
+
+    {0x19, 0xe8}, // RegRxBw: 25 kHz
+	{0x1a, 0xe0},
+
     {0x2C, 0x00}, // RegPreambleMsb: 3 bytes preamble
     {0x2D, 0x03}, // RegPreambleLsb
     {0x2E, 0x88}, // RegSyncConfig: Enable sync word, 2 bytes sync word
