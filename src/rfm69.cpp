@@ -30,13 +30,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include "stm32f10x_gpio.h"
+
+
 extern "C"{
-#include "printf.h"
+	#include "printf.h"
 }
 
+#define rfm_log(line, ...) //fprintf(stderr, line, ## __VA_ARGS__)
 
 #define TIMEOUT_MODE_READY    1000000 ///< Maximum amount of time until mode switch [ms]
-#define TIMEOUT_PACKET_SENT   100 ///< Maximum amount of time until packet must be sent [ms]
+#define TIMEOUT_PACKET_SENT   1000 ///< Maximum amount of time until packet must be sent [ms]
 #define TIMEOUT_CSMA_READY    500 ///< Maximum CSMA wait time for channel free detection [ms]
 #define CSMA_RSSI_THRESHOLD   -85 ///< If RSSI value is smaller than this, consider channel as free [dBm]
 
@@ -455,22 +458,25 @@ uint8_t syncSentence[] = {'w', 'i', 'k', 'l', 'o', 's', 'o', 'f', 't', 0, 0};
 
 int RFM69::sendPacket(uint8_t* packet, uint16_t len)
 {
-	printf_("sendPacket %d\n", len);
+	uint8_t sequence = 0;
+
+	rfm_log("sendPacket %d\n", len);
 
 	uint16_t bytesToBeSent = len;
 	uint8_t* data = packet;
 
-	syncSentence[9] = len <<8;
+	syncSentence[9] = len >> 8;
 	syncSentence[10] = len;
 
-	if (sendWithAck(syncSentence, 11) <0 ) return -1;
+	if (sendWithAck(syncSentence, 11, sequence++) <0 ) return -1;
+
 	while(bytesToBeSent > 0){
-		if (bytesToBeSent > RFM69_MAX_PAYLOAD){
-			if (sendWithAck(data, RFM69_MAX_PAYLOAD) <0 ) return -1;
-			bytesToBeSent -= RFM69_MAX_PAYLOAD;
-			data += RFM69_MAX_PAYLOAD;
+		if (bytesToBeSent > (RFM69_MAX_PAYLOAD-1)){
+			if (sendWithAck(data, RFM69_MAX_PAYLOAD-1, sequence++) <0 ) return -1;
+			bytesToBeSent -= RFM69_MAX_PAYLOAD-1;
+			data += RFM69_MAX_PAYLOAD-1;
 		}else{
-			if (sendWithAck(data, bytesToBeSent) <0 ) return -1;
+			if (sendWithAck(data, bytesToBeSent, sequence++) <0 ) return -1;
 			bytesToBeSent = 0;
 		}
 	}
@@ -479,66 +485,92 @@ int RFM69::sendPacket(uint8_t* packet, uint16_t len)
 }
 
 int RFM69::receivePacket(uint8_t* buf, uint16_t maxSize){
-	uint8_t ack[] = {0,0};
+	uint8_t ack;
+	uint8_t* bufPos = buf;
 
 	int bytesToReceive;
 
-	uint16_t bytesReceived = _receive(buf, RFM69_MAX_PAYLOAD);
+	int bytesReceived = _receive(buf, RFM69_MAX_PAYLOAD, &ack);
 
-	if (bytesReceived == 0) return 0;
+	if (bytesReceived < 0) return 0;
 
-	if (bytesReceived != sizeof(syncSentence)) return 0;
+	rfm_log("header len=%d\n", bytesReceived);
+	if (bytesReceived != sizeof(syncSentence)){
+		rfm_log("Header has invalid size\n");
+		return -1;
+	}
+
+	if (ack != 0 ){
+		rfm_log("First ACK is not 0\n");
+		return -1;
+	}
 
 	bytesToReceive = (buf[9]<<8 | buf[10]);
 
 	bytesReceived = 0;
 
-	printf_("receivePacket plen=%d\n", bytesToReceive);
-	printf_("received bytes len=%d\n", bytesReceived);
-	send(ack, 2);
+	send(0, 0, ack);
+
+	uint32_t t1 = mstimer_get();
+
+	rfm_log("receivePacket to be received=%d\n", bytesToReceive);
 
 	if (bytesToReceive > bytesReceived){
-		bytesToReceive -= bytesReceived;
 		while(bytesToReceive > 0){
-			printf_("received bytes len=%d\n", l);
 			while(!isPacketReady()); // todo add timeout
-			int l = _receive(buf+ bytesReceived, RFM69_MAX_PAYLOAD);
-			send(ack, 2);
-			bytesToReceive -=l;
-			bytesReceived += l;
+
+			uint8_t expectedSeqNumber = ack+1;
+			uint8_t chunk[RFM69_MAX_PAYLOAD];
+
+			int l = _receive(chunk, RFM69_MAX_PAYLOAD, &ack);
+
+			//rfm_log("received = %d %d\n", l, ack);
+			if (expectedSeqNumber != ack){
+			    rfm_log("invalid ack %d %d\n", expectedSeqNumber, ack);
+			    return -1;
+			}else{
+				memcpy(bufPos, chunk, l);
+				bufPos += l;
+				bytesToReceive -=l;
+				bytesReceived += l;
+			}
+			send(0, 0, ack);
 		}
 	}
+	uint32_t t2 = mstimer_get();
+	rfm_log("received in ms=%d\n", t2-t1);
 	return bytesReceived;
 }
 
 
-int RFM69::sendWithAck(uint8_t* data, uint16_t len){
-	printf_("sendWithAck %d\n", len);
+int RFM69::sendWithAck(uint8_t* data, uint16_t len, uint8_t sequence){
+	rfm_log("sendWithAck %d\n", len);
 	uint8_t buf[20];
-	for (int i=0; i<10; i++){
-		send(data, len);
-		printf_("wait for ack \n");
+	for (int i=0; i<10; i++)
+	{
+		send(data, len, sequence);
 
-		for (int j=0; j<100; j++){
+		for (int j=0; j<10; j++){
 			if (isPacketReady()) break;
-			printf_("waiting for ack %d\n", j);
-			delay_ms(1);
+			rfm_log("waiting for ack\n");
+			delay_ms(5);
 		}
-
-		int res = _receive(buf, 20);
-		if (res >0){
-			printf_("received ack len=%d\n", res);
+		uint8_t ackSeq;
+		int res = _receive(buf, 20, &ackSeq);
+		if (res >= 0){
+			rfm_log("received ack =%d\n", ackSeq );
 			return len;
 		}else{
-			printf_("ack not received, try again %d\n", i);
+			rfm_log("ack not received, try again %d\n", i);
 		}
 	}
 	return -1;
 }
 
 
-int RFM69::send(uint8_t* data, unsigned int dataLength)
+int RFM69::send(uint8_t* data, unsigned int dataLength, uint8_t sequence)
 {
+  rfm_log("send seq=%d\n", sequence);
   if (RFM69_MODE_SLEEP != _mode)
   {
     setMode(RFM69_MODE_STANDBY);
@@ -549,43 +581,41 @@ int RFM69::send(uint8_t* data, unsigned int dataLength)
 
   /* Wait for a free channel, if CSMA/CA algorithm is enabled.
    * This takes around 1,4 ms to finish if channel is free */
-  if (true == _csmaEnabled)
-  {
-    // Restart RX
-    writeRegister(0x3D, (readRegister(0x3D) & 0xFB) | 0x20);
-
-    // switch to RX mode
-    setMode(RFM69_MODE_RX);
-
-    // wait until RSSI sampling is done; otherwise, 0xFF (-127 dBm) is read
-
-    // RSSI sampling phase takes ~960 µs after switch from standby to RX
-    uint32_t timeEntry = mstimer_get();
-    while (((readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - timeEntry) < 10));
-
-    while ((false == channelFree()) && ((mstimer_get() - timeEntry) < TIMEOUT_CSMA_READY))
-    {
-      // wait for a random time before checking again
-      delay_ms(10);
-
-      /* try to receive packets while waiting for a free channel
-       * and put them into a temporary buffer */
-      int bytesRead;
-      if ((bytesRead = _receive(_rxBuffer, RFM69_MAX_PAYLOAD)) > 0)
-      {
-        _rxBufferLength = bytesRead;
-
-        // module is in RX mode again
-
-        // Restart RX and wait until RSSI sampling is done
-        writeRegister(0x3D, (readRegister(0x3D) & 0xFB) | 0x20);
-        uint32_t timeEntry = mstimer_get();
-        while (((readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - timeEntry) < 10));
-      }
-    }
-
-    setMode(RFM69_MODE_STANDBY);
-  }
+//  if (true == _csmaEnabled)
+//  {
+//    // Restart RX
+//    writeRegister(0x3D, (readRegister(0x3D) & 0xFB) | 0x20);
+//
+//    // switch to RX mode
+//    setMode(RFM69_MODE_RX);
+//
+//    // RSSI sampling phase takes ~960 µs after switch from standby to RX
+//    uint32_t timeEntry = mstimer_get();
+//    while (((readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - timeEntry) < 10));
+//
+//    while ((false == channelFree()) && ((mstimer_get() - timeEntry) < TIMEOUT_CSMA_READY))
+//    {
+//      // wait for a random time before checking again
+//      delay_ms(10);
+//
+//      /* try to receive packets while waiting for a free channel
+//       * and put them into a temporary buffer */
+//      int bytesRead;
+//      if ((bytesRead = _receive(_rxBuffer, RFM69_MAX_PAYLOAD)) > 0)
+//      {
+//        _rxBufferLength = bytesRead;
+//
+//        // module is in RX mode again
+//
+//        // Restart RX and wait until RSSI sampling is done
+//        writeRegister(0x3D, (readRegister(0x3D) & 0xFB) | 0x20);
+//        uint32_t timeEntry = mstimer_get();
+//        while (((readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - timeEntry) < 10));
+//      }
+//    }
+//
+//    setMode(RFM69_MODE_STANDBY);
+//  }
 
   // transfer packet to FIFO
   chipSelect();
@@ -593,7 +623,9 @@ int RFM69::send(uint8_t* data, unsigned int dataLength)
   // address FIFO
   _spi->transfer(0x00 | 0x80);
 
-  _spi->transfer(dataLength);
+  _spi->transfer(dataLength+1);
+
+  _spi->transfer(sequence);
 
   // send payload
   for (unsigned int i = 0; i < dataLength; i++)
@@ -667,7 +699,7 @@ int RFM69::receive(uint8_t* data, unsigned int dataLength)
   else
   {
     // regular receive
-    return _receive(data, dataLength);
+    //return _receive(data, dataLength);
   }
 }
 
@@ -713,28 +745,9 @@ int RFM69::read(uint8_t* data, uint16_t dataLength)
 
 	return bytesRead;
 }
-int RFM69::readPacket(uint8_t* data, unsigned int dataLength)
-{
-	// get FIFO content
-	unsigned int bytesRead = 0;
 
-	while (bytesRead < dataLength)
-	{
-		//wait for bytes
-		while (!isFifoNotEmpty()){
-			printf_("waiting for bytes");
-		}
-		uint8_t reg = readRegister(0x28);
-		printf_("reg %d %d\n", reg, bytesRead);
 
-		data[bytesRead] = readRegister(0x00);
-		bytesRead++;
-	}
-
-	return bytesRead;
-}
-
-int RFM69::_receive(uint8_t* data, unsigned int dataLength)
+int RFM69::_receive(uint8_t* data, unsigned int dataLength, uint8_t* sequence)
 {
   // go to RX mode if not already in this mode
   if (RFM69_MODE_RX != _mode)
@@ -752,11 +765,14 @@ int RFM69::_receive(uint8_t* data, unsigned int dataLength)
     // get FIFO content
     unsigned int bytesRead = 0;
 
-    uint16_t bytesInChunk = readRegister(0x0);
+    uint16_t bytesInChunk = readRegister(0x0)-1; //minus sequence byte
+    *sequence = readRegister(0x0);
+
+    rfm_log("recv seq=%d\n", *sequence);
 
 
     // read until FIFO is empty or buffer length exceeded
-    while ((readRegister(0x28) & 0x40) && (bytesRead < dataLength))
+    while ((readRegister(0x28) & 0x40) && (bytesRead < bytesInChunk))
     {
       // read next byte
       data[bytesRead] = readRegister(0x00);
@@ -777,7 +793,7 @@ int RFM69::_receive(uint8_t* data, unsigned int dataLength)
     return bytesRead;
   }
   else
-    return 0;
+    return -1;
 }
 
 /**

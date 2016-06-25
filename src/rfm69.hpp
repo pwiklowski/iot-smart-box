@@ -28,7 +28,7 @@
 /** @addtogroup RFM69
  * @{
  */
-#define RFM69_MAX_PAYLOAD		64 ///< Maximum bytes payload
+#define RFM69_MAX_PAYLOAD		63 ///< Maximum bytes payload
 
 /**
  * Valid RFM69 operation modes.
@@ -98,8 +98,8 @@ public:
 
   RFM69Mode setMode(RFM69Mode mode);
 
-  int send(uint8_t* data, unsigned int dataLength);
-  int sendWithAck(uint8_t* data, uint16_t len);
+  int send(uint8_t* data, unsigned int dataLength, uint8_t sequence);
+  int sendWithAck(uint8_t* data, uint16_t len, uint8_t sequence);
   void setPowerLevel(uint8_t power);
 
   int setPowerDBm(int8_t dBm);
@@ -158,13 +158,14 @@ public:
   void setPASettings(uint8_t forcePA = 0);
   
   bool setAESEncryption(const void* aesKey, unsigned int keyLength);
-  int _receive(uint8_t* data, unsigned int dataLength);
+  int _receive(uint8_t* data, unsigned int dataLength, uint8_t* sequence);
 
 
   int read(uint8_t* data, uint16_t len);
   void waitForModeReady();
   bool isFifoNotEmpty();
   bool isPacketReady();
+  bool isFifoThreshold();
 
   int readPacket(uint8_t* data, unsigned int dataLength);
   int sendPacket(uint8_t* data, uint16_t len);
