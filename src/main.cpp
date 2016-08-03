@@ -1,18 +1,17 @@
-
 #include <ctype.h>
 #include "stm32f10x.h"
 #include "stm32f10x_usart.h"
-#include "systimer.h"
+
 #include "string.h"
-#include "spiL1.hpp"
-#include "rfm69.hpp"
+#include "rfm69.h"
 
 #include "COAPServer.h"
 #include "cbor.h"
 #include "OICServer.h"
 
-extern "C"{
-	#include "printf.h"
+extern "C" {
+#include "printf.h"
+#include "systimer.h"
 }
 
 
@@ -107,19 +106,12 @@ int main()
 	init();
 	printf_("start\n");
 
-	SPI spiRF(SPI1);
-	spiRF.setPrescaler(SPI_BaudRatePrescaler_8);
-	spiRF.init();
-	//SPI_RxFIFOThresholdConfig (SPI1, SPI_RxFIFOThreshold_HF);
-
-
 	for(int i=0; i<255; i++){
 		buf[i] = i;
 
 	}
 
-
-	RFM69 rfm69(&spiRF, GPIOA, GPIO_Pin_4, false); // false = RFM69W, true = RFM69HW
+	Rfm69 rfm69;
 	rfm69.reset();
 
 	rfm69.init();

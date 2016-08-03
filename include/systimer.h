@@ -9,7 +9,7 @@
 #define SYSTIMER_H_
 
 
-void delay_ms(unsigned ms);
+void delay_ms(uint32_t ms);
 
 void mstimer_init(void);
 
