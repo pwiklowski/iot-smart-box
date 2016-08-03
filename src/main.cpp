@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include "stm32f10x.h"
 #include "stm32f10x_usart.h"
+#include "stm32f10x_exti.h"
 
 #include "string.h"
 #include "rfm69.h"
@@ -70,42 +71,93 @@ void init() {
 
 	USART_Cmd(USART1, ENABLE);
 
+
+
+
+	  GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+	  EXTI_InitTypeDef EXTI_InitStructure;
+
+	  EXTI_InitStructure.EXTI_Line = EXTI_Line0;
+	  EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+	  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
+	  EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+	  EXTI_Init(&EXTI_InitStructure);
+
+	  NVIC_InitTypeDef   NVIC_InitStructure;
+	  NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;
+	  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+	  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+	  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	  NVIC_Init(&NVIC_InitStructure);
+
 }
 
-
-
-
-static void reverse(char* s)
+Rfm69 rfm69;
+uint8_t packet[300];
+uint32_t setTime;
+extern "C" void EXTI0_IRQHandler(void)
 {
-    int i, j;
-    char c;
+  EXTI_ClearITPendingBit(EXTI_Line0);
+  if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == Bit_SET){
+	  setTime = mstimer_get();
+  }else{
+	  if (setTime !=0 ){
+		  uint32_t pressTime = mstimer_get() - setTime;
+		  setTime = 0;
+		  if (pressTime >50){
+			  printf_("release %d\n", pressTime);
+			  uint32_t t = mstimer_get();
+			  List<uint8_t> data;
 
-    for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
-        c = s[i];
-        s[i] = s[j];
-        s[j] = c;
-    }
+			  cbor initial(CBOR_TYPE_MAP);
+			  initial.append("rt", "oic.r.switch.binary");
+			  initial.append("value", 1);
+
+			  initial.dump(&data);
+
+			  for (uint16_t i=0; i<data.size(); i++){
+				  packet[i] = data.at(i);
+			  }
+
+			  printf_("prep %d\n", mstimer_get() -t);
+			  t = mstimer_get();
+			  rfm69.send(packet, data.size(), 0);
+			  printf_("send %d\n", mstimer_get() -t);
+			  rfm69.sleep();
+		  }
+	  }
+  }
+}
+static void reverse(char* s) {
+	int i, j;
+	char c;
+
+	for (i = 0, j = strlen(s) - 1; i < j; i++, j--) {
+		c = s[i];
+		s[i] = s[j];
+		s[j] = c;
+	}
 }
 
-static void itoa(int n, char* s)
-{
-     int i, sign;
+static void itoa(int n, char* s) {
+	int i, sign;
 
-     if ((sign = n) < 0)  /* записываем знак */
-         n = -n;          /* делаем n положительным числом */
-     i = 0;
-     do {       /* генерируем цифры в обратном порядке */
-         s[i++] = n % 10 + '0';   /* берем следующую цифру */
-     } while ((n /= 10) > 0);     /* удаляем */
-     if (sign < 0)
-         s[i++] = '-';
-     s[i] = '\0';
-     reverse(s);
+	if ((sign = n) < 0) /* записываем знак */
+		n = -n; /* делаем n положительным числом */
+	i = 0;
+	do { /* генерируем цифры в обратном порядке */
+		s[i++] = n % 10 + '0'; /* берем следующую цифру */
+	} while ((n /= 10) > 0); /* удаляем */
+	if (sign < 0)
+		s[i++] = '-';
+	s[i] = '\0';
+	reverse(s);
 }
 #define DEVICE
 
-int main()
-{
+
+
+int main() {
 	uint8_t buf[1024];
 	init();
 	printf_("start\n");
