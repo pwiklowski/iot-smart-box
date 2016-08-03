@@ -36,7 +36,7 @@ void init() {
 
 
 	GPIO_InitTypeDef gpioStructure1;
-	gpioStructure1.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_10;
+	gpioStructure1.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_6 | GPIO_Pin_10;
 	gpioStructure1.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	gpioStructure1.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOA, &gpioStructure1);
