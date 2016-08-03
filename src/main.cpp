@@ -14,8 +14,12 @@ extern "C" {
 #include "systimer.h"
 }
 
+uint64_t get_current_ms() {
 
-void init(){
+	return mstimer_get();
+}
+
+void init() {
 	mstimer_init();
 	  RCC_APB2PeriphClockCmd( RCC_APB2Periph_AFIO, ENABLE);
 
