@@ -178,45 +178,8 @@ int main() {
 	char* test = "czesc";
 	char* ok = "ok";
 
-
 	rfm69.setMode(RFM69_MODE_RX);
 	rfm69.waitForModeReady();
-
-
-	buf[0] = 200 >>8;
-	buf[1] = 200;
-
-	while(1){
-
-
-//		int res = rfm69._receive(buf, 64);
-//		if (res >0){
-//			printf_("received packet with len=%d\n", res);
-//			rfm69.send((uint8_t*)ok, 2);
-//		}
-
-		int res = rfm69.receivePacket(buf, 1024);
-		if (res >0){
-			printf_("received packet with len=%d\n", res);
-		}
-
-
-
-//
-//		printf_("send packet\n");
-//		if (rfm69.sendPacket(buf, 202) <0){
-//			printf_("send packet FAIL\n");
-//		}
-//
-//		delay_ms(5000);
-//
-//
-//
-
-
-	}
-
-
 
 	uint8_t status;
 
