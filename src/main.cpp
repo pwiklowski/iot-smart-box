@@ -220,30 +220,28 @@ int main() {
 
 	uint8_t status;
 
-	OICServer server("Buttun PC","0685B960-736F-46F7-BEC0-9E6CBD61ADC1", [&](COAPPacket* packet){
-		size_t response_len;
-		packet->build(buf, &response_len);
-		rfm69.send(buf, response_len);
-		rfm69.sleep();
-		printf_("send packet\n");
-
-	});
+	OICServer server("Buttun RFM69 OCF", "0685B960-736F-46F7-BEC0-9E6CBD61ADC1",
+			[&](COAPPacket* packet) {
+				size_t response_len;
+				packet->build(buf, &response_len);
+				if (rfm69.sendPacket(buf, response_len) <0) {
+					printf_("send packet FAIL\n");
+				}
+			});
 
 	cbor initial(CBOR_TYPE_MAP);
 	initial.append("rt", "oic.r.switch.binary");
 	initial.append("value", 1);
 
-	OICResource* button = new OICResource("/switch", "oic.r.switch.binary","oic.if.r", [&](cbor* data){
+	OICResource* button = new OICResource("/switch", "oic.r.switch.binary",
+			"oic.if.r", [&](cbor* data) {
 
-
-	}, initial);
+			}, initial);
 
 	server.addResource(button);
 	server.start();
 
-
-
-    COAPPacket* p = new COAPPacket();
+	COAPPacket* p = new COAPPacket();
 	p->setType(COAP_TYPE_CON);
 	p->setResonseCode(COAP_METHOD_GET);
 	p->addOption(new COAPOption(COAP_OPTION_URI_PATH, "oic"));
@@ -252,29 +250,28 @@ int main() {
 	p->setMessageId(0);
 	p->setAddress("224.0.1.187 5683"); //TODO: move it to application
 
-
-#if 1
+#if 0
 	server.getCoapServer()->sendPacket(p, [&](COAPPacket* p){
-	int a = 4;
+		int a = 4;
+
+		printf_("response received\n");
 	});
 #endif
+	uint8_t seq;
+	uint16_t tt = 0;
+	while (1) {
 
-	int c=0;
-
-	while(1){
-		int bytesReceived = rfm69._receive(buf, sizeof(buf));
-		c += bytesReceived;
-
-		if (bytesReceived>0){
-			printf_("Handle bytes\n");
-			COAPPacket* p = COAPPacket::parse(buf+1, bytesReceived, "afs");
-			if (p !=0){
-				//send("Handle packet\n");
-				//server.getCoapServer()->handleMessage(p);
+		int bytesReceived = rfm69.receivePacket(buf, 1024);
+		if (bytesReceived > 0) {
+			printf_("packet received size=%d\n", bytesReceived);
+			COAPPacket* p = COAPPacket::parse(buf, bytesReceived, "afs");
+			if (p != 0) {
+				server.getCoapServer()->handleMessage(p);
+				printf_("id=%d\n", tt++);
+				delete p;
 			}
 		}
+		server.getCoapServer()->tick();
 	}
-
 	return 0;
 }
-
