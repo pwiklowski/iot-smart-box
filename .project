@@ -36,6 +36,11 @@
 			<location>/home/pawwik/dev/liboic</location>
 		</link>
 		<link>
+			<name>mpu6050-driver</name>
+			<type>2</type>
+			<location>/home/pawwik/dev/mpu6050-driver</location>
+		</link>
+		<link>
 			<name>rfm69-driver</name>
 			<type>2</type>
 			<location>/home/pawwik/dev/rfm69-driver</location>
