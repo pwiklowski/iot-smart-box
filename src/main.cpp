@@ -7,13 +7,14 @@
 
 //#include "cbor.h"
 #include "MPU9250.h"
+#include "Mpu6050.h"
+
 
 extern "C" {
 #include "printf.h"
 #include "systimer.h"
 }
 
-#include "math.h"
 
 uint64_t get_current_ms() {
 
@@ -152,11 +153,234 @@ static void itoa(int n, char* s) {
 	s[i] = '\0';
 	reverse(s);
 }
-#define DEVICE
+#define M9250_
+
+#define M6050
+
+typedef enum{
+	X_POS,
+	Y_POS,
+	Z_POS,
+
+	X_NEG,
+	Y_NEG,
+	Z_NEG,
+
+	NONE
+
+
+}Orientation;
+
+
+char* getOrientation(uint8_t orientation){
+
+	if (orientation == X_POS) return "X_POS";
+	if (orientation ==Y_POS)return "Y_POS";
+	if (orientation ==Z_POS)return "Z_POS";
+	if (orientation ==X_NEG)return "X_NEG";
+	if (orientation ==Y_NEG)return "Y_NEG";
+	if (orientation ==Z_NEG)return "Z_NEG";
+	if (orientation ==NONE)return "NONE";
+
+
+
+}
+
+
 
 int main() {
 	init();
 
+#ifdef M6050
+	Mpu6050 mpu;
+	mpu.init();
+	mpu.calibrate();
+
+	if (!mpu.test()){
+		printf_("mpu has problem\n");
+
+	}
+	float sum = 0;
+	int16_t data[6];
+
+	//mpu.setMotionDetection();
+
+
+	int16_t baseX = 0;
+	int16_t baseY = 0;
+	int16_t baseZ = 0;
+
+
+	int16_t detectionPoint = 3900;
+
+
+	uint8_t orientation = Z_POS;
+
+	float trust = 0.95;
+
+	uint8_t len = 0;
+	uint8_t changeOrientationLen =0;
+
+
+	printf_("start loop\n");
+	while(1){
+//		uint8_t interupt;
+//		mpu.BufferRead(MPU6050_DEFAULT_ADDRESS, &interupt, MPU6050_RA_INT_STATUS, 1);
+//
+//		//printf_("int %d \n", interupt);
+//		if(interupt & (1<<6)) {
+//
+//			uint8_t status;
+//			mpu.BufferRead(MPU6050_DEFAULT_ADDRESS, &status, MPU6050_RA_MOT_DETECT_STATUS, 1);
+//
+//			if (( status & (1<<7)) == (1<<7)) printf_("X NEG\n");
+//			if (( status & (1<<6)) == (1<<6)) printf_("X POS\n");
+//			if (( status & (1<<5)) == (1<<5)) printf_("Y NEG\n");
+//			if (( status & (1<<4)) == (1<<4)) printf_("Y POS\n");
+//			if (( status & (1<<3)) == (1<<3)) printf_("Z NEG\n");
+//			if (( status & (1<<2)) == (1<<2)) printf_("Z POS\n");
+//			if (( status & (1<<0)) == (1<<0)) printf_("ZERO\n");
+//
+//			printf_("int %d %d\n", interupt, status);
+//		}
+
+
+//
+//		gx = (float)data[3]*mpu.getGyroScale();
+//		gy = (float)data[4]*mpu.getGyroScale();
+//		gz = (float)data[5]*mpu.getGyroScale();
+//
+//		Now = mstimer_get();
+//		deltat = (float) ((Now - lastUpdate) / 1000.0f); // set integration time by time elapsed since last filter update
+//		lastUpdate = Now;
+//
+//		sum += gz*deltat;
+
+
+
+		//printf_("%d %d %d\n", base, (int) data[2], base - currentSample);
+
+		mpu.GetRawAccelGyro(data);
+
+		int16_t x = data[0];
+		int16_t y = data[1];
+		int16_t z = data[2];
+
+
+		uint8_t pos;
+		baseX = baseX*trust+ x*(1-trust);
+		baseY = baseY*trust+ y*(1-trust);
+		baseZ = baseZ*trust+ z*(1-trust);
+
+
+		//printf_("%d %d %d\n",mstimer_get(), z,baseZ);
+
+
+
+		if (orientation != NONE){
+			int16_t val;
+
+			if (orientation == X_POS){
+				val = x;
+			}else if (orientation ==Y_POS){
+				val = y;
+			}else if (orientation ==Z_POS){
+				val = z;
+			}else if (orientation ==X_NEG){
+				val = -x;
+			}else if (orientation ==Y_NEG){
+				val = -y;
+			}else if (orientation ==Z_NEG){
+				val = -z;
+			}
+
+			if (val < 3000 ){
+				changeOrientationLen++;
+				if (changeOrientationLen > 4){
+					printf_("orientation change \n");
+					orientation = NONE;
+					changeOrientationLen = 0;
+				}
+			}else{
+				changeOrientationLen = 0;
+			}
+
+			if(val < -500){
+				len++;
+			}else{
+				if (len >0 && len < 10){
+					printf_("event %d %d %s\n",mstimer_get(), len, getOrientation(orientation));
+				}
+				len = 0;
+			}
+		}
+
+		if (orientation == NONE){
+			if (x > detectionPoint){
+				orientation = X_POS;
+			}else if (x < -detectionPoint){
+				orientation = X_NEG;
+			}else if (y > detectionPoint){
+				orientation = Y_POS;
+			}else if (y < -detectionPoint){
+				orientation = Y_NEG;
+			}else if (z > detectionPoint){
+				orientation = Z_POS;
+			}else if (z < -detectionPoint){
+				orientation = Z_NEG;
+			}else{
+				orientation = NONE;
+			}
+			printf_("orientation changed to %s\n", getOrientation(orientation));
+		}
+
+
+
+
+//		if (baseX > detectionPoint){
+//			pos = X_POS;
+//		}else if (baseX < -detectionPoint){
+//			pos = X_NEG;
+//		}else if (baseY > detectionPoint){
+//			pos = Y_POS;
+//		}else if (baseY < -detectionPoint){
+//			pos = Y_NEG;
+//		}else if (baseZ > detectionPoint){
+//			pos = Z_POS;
+//		}else if (baseZ < -detectionPoint){
+//			pos = Z_NEG;
+//		}else{
+//			pos = NONE;
+//		}
+//
+//		if (orientation != pos){
+//			printf_("nowa orientacja %d\n", pos);
+//			orientation = pos;
+//		}
+//
+//		if (orientation == Z_POS){
+//			if (data[2] <0){
+//				printf_("jest klik Z_POS\n");
+//				delay_ms(20);
+//			}
+//		}
+//		if (orientation == Z_NEG){
+//			if (data[2] > 0){
+//				printf_("jest klik Z_NEG\n");
+//				delay_ms(20);
+//			}
+//		}
+
+		delay_ms(20);
+
+
+	//printf_("%d %d %d %d\n", (int)gx, (int)gy,(int)gz, (int)sum);
+	}
+
+
+#endif
+
+#ifdef M9250
 	MPU9250 mpu9250;
 	mpu9250.initI2c();
 
@@ -308,6 +532,8 @@ int main() {
 		rfm69.setPowerDBm(13); // +10 dBm
 
 		memset(packet, 0, 10);
+
+#endif
 
 #endif
 
