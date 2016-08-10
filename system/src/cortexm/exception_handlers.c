@@ -63,8 +63,6 @@ NMI_Handler (void)
 
 // ----------------------------------------------------------------------------
 
-#define TRACE
-
 #if defined(TRACE)
 
 #if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
@@ -85,31 +83,31 @@ dumpExceptionStack (ExceptionStackFrame* frame,
                 uint32_t cfsr, uint32_t mmfar, uint32_t bfar,
                                         uint32_t lr)
 {
-  printf_ ("Stack frame:\n");
-  printf_ (" R0 =  %d\n", frame->r0);
-  printf_ (" R1 =  %d\n", frame->r1);
-  printf_ (" R2 =  %d\n", frame->r2);
-  printf_ (" R3 =  %d\n", frame->r3);
-  printf_ (" R12 = %d\n", frame->r12);
-  printf_ (" LR =  %d\n", frame->lr);
-  printf_ (" PC =  %d\n", frame->pc);
-  printf_ (" PSR = %d\n", frame->psr);
-  printf_ ("FSR/FAR:\n");
-  printf_ (" CFSR =  %d\n", cfsr);
-  printf_ (" HFSR =  %d\n", SCB->HFSR);
-  printf_ (" DFSR =  %d\n", SCB->DFSR);
-  printf_ (" AFSR =  %d\n", SCB->AFSR);
+  trace_printf ("Stack frame:\n");
+  trace_printf (" R0 =  %08X\n", frame->r0);
+  trace_printf (" R1 =  %08X\n", frame->r1);
+  trace_printf (" R2 =  %08X\n", frame->r2);
+  trace_printf (" R3 =  %08X\n", frame->r3);
+  trace_printf (" R12 = %08X\n", frame->r12);
+  trace_printf (" LR =  %08X\n", frame->lr);
+  trace_printf (" PC =  %08X\n", frame->pc);
+  trace_printf (" PSR = %08X\n", frame->psr);
+  trace_printf ("FSR/FAR:\n");
+  trace_printf (" CFSR =  %08X\n", cfsr);
+  trace_printf (" HFSR =  %08X\n", SCB->HFSR);
+  trace_printf (" DFSR =  %08X\n", SCB->DFSR);
+  trace_printf (" AFSR =  %08X\n", SCB->AFSR);
 
   if (cfsr & (1UL << 7))
     {
-      printf_ (" MMFAR = %d\n", mmfar);
+      trace_printf (" MMFAR = %08X\n", mmfar);
     }
   if (cfsr & (1UL << 15))
     {
-      printf_ (" BFAR =  %d\n", bfar);
+      trace_printf (" BFAR =  %08X\n", bfar);
     }
-  printf_ ("Misc\n");
-  printf_ (" LR/EXC_RETURN= %d\n", lr);
+  trace_printf ("Misc\n");
+  trace_printf (" LR/EXC_RETURN= %08X\n", lr);
 }
 
 #endif // defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
@@ -120,16 +118,16 @@ void
 dumpExceptionStack (ExceptionStackFrame* frame, uint32_t lr)
 {
   trace_printf ("Stack frame:\n");
-  trace_printf (" R0 =  %d\n", frame->r0);
-  trace_printf (" R1 =  %d\n", frame->r1);
-  trace_printf (" R2 =  %d\n", frame->r2);
-  trace_printf (" R3 =  %d\n", frame->r3);
-  trace_printf (" R12 = %d\n", frame->r12);
-  trace_printf (" LR =  %d\n", frame->lr);
-  trace_printf (" PC =  %d\n", frame->pc);
-  trace_printf (" PSR = %d\n", frame->psr);
+  trace_printf (" R0 =  %08X\n", frame->r0);
+  trace_printf (" R1 =  %08X\n", frame->r1);
+  trace_printf (" R2 =  %08X\n", frame->r2);
+  trace_printf (" R3 =  %08X\n", frame->r3);
+  trace_printf (" R12 = %08X\n", frame->r12);
+  trace_printf (" LR =  %08X\n", frame->lr);
+  trace_printf (" PC =  %08X\n", frame->pc);
+  trace_printf (" PSR = %08X\n", frame->psr);
   trace_printf ("Misc\n");
-  trace_printf (" LR/EXC_RETURN= %d\n", lr);
+  trace_printf (" LR/EXC_RETURN= %08X\n", lr);
 }
 
 #endif // defined(__ARM_ARCH_6M__)
@@ -375,7 +373,7 @@ HardFault_Handler_C (ExceptionStackFrame* frame __attribute__((unused)),
 #endif
 
 #if defined(TRACE)
-  printf ("[HardFault]\n");
+  trace_printf ("[HardFault]\n");
   dumpExceptionStack (frame, cfsr, mmfar, bfar, lr);
 #endif // defined(TRACE)
 

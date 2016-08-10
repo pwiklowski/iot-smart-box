@@ -26,16 +26,6 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>libcoap</name>
-			<type>2</type>
-			<location>/home/pawwik/dev/libcoap</location>
-		</link>
-		<link>
-			<name>liboic</name>
-			<type>2</type>
-			<location>/home/pawwik/dev/liboic</location>
-		</link>
-		<link>
 			<name>mpu6050-driver</name>
 			<type>2</type>
 			<location>/home/pawwik/dev/mpu6050-driver</location>

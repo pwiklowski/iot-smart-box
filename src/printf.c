@@ -34,7 +34,6 @@
 #include <stdlib.h>
 
 #include "printf.h"
-#include "itoa.h"
 #include "stm32f10x_usart.h"
 
 
