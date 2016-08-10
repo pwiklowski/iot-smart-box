@@ -6,7 +6,6 @@
 #include "string.h"
 
 //#include "cbor.h"
-#include "MPU9250.h"
 #include "Mpu6050.h"
 
 
@@ -14,6 +13,7 @@ extern "C" {
 #include "printf.h"
 #include "systimer.h"
 }
+
 
 
 uint64_t get_current_ms() {
@@ -89,73 +89,6 @@ void init() {
 //	NVIC_Init(&NVIC_InitStructure);
 
 }
-#ifdef USE_RADIO
-Rfm69 rfm69;
-uint8_t packet[300];
-uint32_t setTime;
-extern "C" void EXTI0_IRQHandler(void)
-{
-	EXTI_ClearITPendingBit(EXTI_Line0);
-	if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == Bit_SET) {
-		setTime = mstimer_get();
-	} else {
-		if (setTime !=0 ) {
-			uint32_t pressTime = mstimer_get() - setTime;
-			setTime = 0;
-			if (pressTime >50) {
-				printf_("release %d\n", pressTime);
-				uint32_t t = mstimer_get();
-				List<uint8_t> data;
-
-//			  cbor initial(CBOR_TYPE_MAP);
-//			  initial.append("rt", "oic.r.switch.binary");
-//			  initial.append("value", 1);
-//
-//			  initial.dump(&data);
-//
-//			  for (uint16_t i=0; i<data.size(); i++){
-//				  packet[i] = data.at(i);
-//			  }
-//
-//			  printf_("prep %d\n", mstimer_get() -t);
-//			  t = mstimer_get();
-//			  rfm69.send(packet, data.size(), 0);
-//			  printf_("send %d\n", mstimer_get() -t);
-//			  rfm69.sleep();
-			}
-		}
-	}
-}
-
-#endif
-static void reverse(char* s) {
-	int i, j;
-	char c;
-
-	for (i = 0, j = strlen(s) - 1; i < j; i++, j--) {
-		c = s[i];
-		s[i] = s[j];
-		s[j] = c;
-	}
-}
-
-static void itoa(int n, char* s) {
-	int i, sign;
-
-	if ((sign = n) < 0) /* записываем знак */
-		n = -n; /* делаем n положительным числом */
-	i = 0;
-	do { /* генерируем цифры в обратном порядке */
-		s[i++] = n % 10 + '0'; /* берем следующую цифру */
-	} while ((n /= 10) > 0); /* удаляем */
-	if (sign < 0)
-		s[i++] = '-';
-	s[i] = '\0';
-	reverse(s);
-}
-#define M9250_
-
-#define M6050
 
 typedef enum{
 	X_POS,
@@ -191,7 +124,6 @@ char* getOrientation(uint8_t orientation){
 int main() {
 	init();
 
-#ifdef M6050
 	Mpu6050 mpu;
 	mpu.init();
 	mpu.calibrate();
@@ -203,9 +135,6 @@ int main() {
 	float sum = 0;
 	int16_t data[6];
 
-	int16_t baseX = 0;
-	int16_t baseY = 0;
-	int16_t baseZ = 0;
 
 
 	int16_t detectionPoint = 3900;
@@ -218,7 +147,6 @@ int main() {
 	uint8_t len = 0;
 	uint8_t changeOrientationLen =0;
 
-
 	printf_("start loop\n");
 	while(1){
 		mpu.GetRawAccelGyro(data);
@@ -226,16 +154,6 @@ int main() {
 		int16_t x = data[0];
 		int16_t y = data[1];
 		int16_t z = data[2];
-
-
-		uint8_t pos;
-		baseX = baseX*trust+ x*(1-trust);
-		baseY = baseY*trust+ y*(1-trust);
-		baseZ = baseZ*trust+ z*(1-trust);
-
-
-		//printf_("%d %d %d\n",mstimer_get(), z,baseZ);
-
 
 
 		if (orientation != NONE){
@@ -293,6 +211,9 @@ int main() {
 				orientation = NONE;
 			}
 			printf_("orientation changed to %s\n", getOrientation(orientation));
+			delay_ms(500);
+			changeOrientationLen = 0;
+			len =0;
 		}
 
 
@@ -302,7 +223,6 @@ int main() {
 	}
 
 
-#endif
 
 		//printf_("start\n");
 #ifdef USE_RADIO
@@ -317,7 +237,6 @@ int main() {
 
 #endif
 
-#endif
 
-		return 0;
-	}
+	return 0;
+}
